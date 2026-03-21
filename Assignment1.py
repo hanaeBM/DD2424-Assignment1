@@ -1,6 +1,7 @@
 import pickle
 import numpy as np
 
+# EXERCICE 1
 
 # question 1
 
@@ -42,6 +43,67 @@ def Normalize(trainX,valX,testX):
 
 # question 4
 
+def Softmax(s):
+    return np.exp(s)/(np.sum(np.exp(s), axis=0, keepdims=True))
+
+def ApplyNetwork(X,network):
+    W=network['W']
+    b=network['b']
+
+    K=W.shape[0]
+    n=W.shape[1]
+
+    s=W@X +b
+    P=Softmax(s)
+    
+
+    return P
+        
+
+# question 5
+
+def ComputeLoss(P,y):
+
+    D=P.shape[1]
+    n=P.shape[1]
+    y = np.array(y, dtype=int)
+    correct_p = P[y, np.arange(n)]
+    
+    l_cross=-np.log(correct_p)
+    L=np.sum(l_cross)/D
+
+
+    return L
+
+
+# question 6
+
+def ComputeAccuracy(P,y):
+    predicted_y=np.argmax(P,axis=0)
+
+    acc=np.sum(y==predicted_y)
+    return acc/P.shape[1]
+
+# question 7
+
+def BackwardPass(X, Y, P, network, lam):
+    grads={}
+    G_batch=-(Y-P)
+    n=X.shape[1]
+    In=np.ones((n,1))
+
+    grads["W"]= G_batch@X.T/n +2*lam*network["W"]
+    grads["b"]=G_batch@In/n
+
+    return grads 
+
+# question 8
+
+# EXERCICE 2
+
+
+
+    
 
 
     
@@ -88,6 +150,30 @@ if __name__ == '__main__':
 
     # question 4
     print("Question 4")
+    P = ApplyNetwork(trainX[:, 0:100], init_net)
+    print("P computed")
+
+    # question 5
+    print("Question 5")
+    L=ComputeLoss(P,train_y[0:100])
+
+    print(f"mean cross-entropy loss = {L}")
+
+    # question 6
+    print("Question 6")
+    Acc=ComputeAccuracy(P,train_y[0:100])
+    print(f"Accuracy= {Acc}")
+
+    # question 7
+    print("Question 7")
+    lam=0
+    grads=BackwardPass(trainX[:, 0:100],train_y[0:100],P,init_net,lam)
+    print(f"Gradients :{grads}")
+
+    # question 8
+    print("Question 8")
+
+
 
 
 
