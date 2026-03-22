@@ -1,5 +1,8 @@
 import pickle
 import numpy as np
+import torch
+import copy
+import matplotlib.pyplot as plt 
 
 # EXERCICE 1
 
@@ -97,8 +100,143 @@ def BackwardPass(X, Y, P, network, lam):
 
     return grads 
 
-# question 8
+# check gradient 
 
+def ComputeGradsWithTorch(X, y, network_params,lam):
+
+    # torch requires arrays to be torch tensors
+    Xt = torch.from_numpy(X)
+
+    # will be computing the gradient w.r.t. these parameters
+    W = torch.tensor(network_params['W'], requires_grad=True)
+    b = torch.tensor(network_params['b'], requires_grad=True)    
+    
+    N = X.shape[1]
+    
+    scores = torch.matmul(W, Xt)  + b
+
+    ## give an informative name to this torch class
+    apply_softmax = torch.nn.Softmax(dim=0)
+
+    # apply softmax to each column of scores
+    P = apply_softmax(scores)
+    
+    ## compute the loss
+    loss = torch.mean(-torch.log(P[y, np.arange(N)]))    
+
+    cost = loss + lam * torch.sum(torch.multiply(W, W))
+    cost.backward()
+
+    # extract the computed gradients and make them numpy arrays 
+    grads = {}
+    grads['W'] = W.grad.numpy()
+    grads['b'] = b.grad.numpy()
+
+    return grads    
+
+def EqualGrad(grads1,grads2):
+    eps=10**(-10)
+    diff_W=np.abs(grads1["W"]-grads2["W"])/np.maximum(eps, np.abs(grads1["W"]) + np.abs(grads2["W"]))
+    diff_b=np.abs(grads1["b"]-grads2["b"])/np.maximum(eps, np.abs(grads1["b"]) + np.abs(grads2["b"]))
+
+    return np.max(diff_W)<=10**(-6) and np.max(diff_b)<=10**(-6)
+
+
+
+# question 8
+def ComputeCost(P,y,network,lam):
+    loss=ComputeLoss(P,y)
+    W=network["W"]
+    
+    return loss + lam*np.sum(W**2)
+
+def MiniBatchGD(X, Y,y,X_val,y_val,GDparams, init_net, lam,seed=42):
+    np.random.seed(seed)
+    trained_net = copy.deepcopy(init_net)
+    eta=GDparams['eta']
+    n_batch=int(GDparams['n_batch'])
+    n_epochs=int(GDparams['n_epochs'])
+    n=X.shape[1]
+
+    C_train=[]
+    L_train=[]
+    C_val=[]
+    L_val=[]
+
+
+    for e in range(n_epochs):
+        idx=np.random.permutation(n)
+        
+        # create minibatch
+        for j in range(n//n_batch):
+            j_start=idx[j*n_batch]
+
+            batch_idx = idx[j*n_batch:(j+1)*n_batch]
+            Xbatch = X[:, batch_idx]
+            Ybatch = Y[:, batch_idx]
+
+            # Forward Pass
+            P=ApplyNetwork(Xbatch,trained_net)
+            # Backward Pass
+            grads=BackwardPass(Xbatch, Ybatch, P, trained_net, lam)
+            # Update
+            trained_net["W"]=trained_net["W"]-eta*grads["W"]
+            trained_net["b"]=trained_net["b"]-eta*grads["b"]
+        # training
+        P= ApplyNetwork(X, trained_net)
+        c_t=ComputeCost(P,y,trained_net,lam)
+        l_t=ComputeLoss(P,y)
+        L_train.append(l_t)
+        C_train.append(c_t)
+        # validation
+        P_v= ApplyNetwork(X_val, trained_net)
+        c_v=ComputeCost(P_v,y_val,trained_net,lam)
+        l_v=ComputeLoss(P_v,y_val)
+        L_val.append(l_v)
+        C_val.append(c_v)
+
+
+    #Cost
+    plt.plot(C_train,label=" Training Cost")
+    plt.plot(C_val,label=" Validation Cost")
+    
+    plt.xlabel("Epochs")
+    plt.ylabel("Cost")
+    plt.title(f"Cost - eta={eta}, lam={lam}")
+
+    plt.legend()
+    #plt.show()
+    plt.savefig(f"plots/cost_eta{eta}_lam{lam}.png")
+    plt.close()
+
+    #Loss
+    plt.plot(L_train,label=" Training Loss")
+    plt.plot(L_val,label=" Validation Loss")
+    plt.ylabel("Loss")
+    plt.xlabel("Epochs")
+    plt.title(f"Lost - eta={eta}, lam={lam}")
+    plt.legend()
+    #plt.show()
+    plt.savefig(f"plots/lost_eta{eta}_lam{lam}.png")
+    plt.close()
+    
+
+
+    return trained_net
+
+def PlotImg(trained_net, eta, lam):
+    Ws = trained_net['W'].transpose().reshape((32, 32, 3, 10), order='F')
+    W_im = np.transpose(Ws, (1, 0, 2, 3))
+    
+    fig, axs = plt.subplots(1, 10, figsize=(20, 2))
+    for i in range(10):
+        w_im = W_im[:, :, :, i]
+        w_im_norm = (w_im - np.min(w_im)) / (np.max(w_im) - np.min(w_im))
+        axs[i].imshow(w_im_norm)
+        axs[i].axis('off')
+    
+    plt.savefig(f"plots/weights_eta{eta}_lam{lam}.png")
+    plt.close()
 # EXERCICE 2
 
 
@@ -166,12 +304,37 @@ if __name__ == '__main__':
 
     # question 7
     print("Question 7")
-    lam=0
-    grads=BackwardPass(trainX[:, 0:100],train_y[0:100],P,init_net,lam)
+    lam=0.1
+    grads = BackwardPass(trainX[:, 0:100], trainY[:, 0:100], P, init_net, lam)
     print(f"Gradients :{grads}")
 
+    print("Check equal Gradient")
+    grads2=ComputeGradsWithTorch(trainX[:, 0:100],train_y[0:100],init_net,lam)
+
+    bool=EqualGrad(grads,grads2)
+    print(bool)
+
     # question 8
+    import os
+    os.makedirs("plots", exist_ok=True)
+
     print("Question 8")
+    GDparams={'n_batch':100,
+              'eta':0.001,
+              'n_epochs':20}
+    trained_net=MiniBatchGD(trainX, trainY,train_y, valX,val_y,GDparams, init_net, lam=0,seed=42)
+     
+    configs = [
+    {'lam': 0,   'n_epochs': 40, 'n_batch': 100, 'eta': 0.1},
+    {'lam': 0,   'n_epochs': 40, 'n_batch': 100, 'eta': 0.001},
+    {'lam': 0.1, 'n_epochs': 40, 'n_batch': 100, 'eta': 0.001},
+    {'lam': 1,   'n_epochs': 40, 'n_batch': 100, 'eta': 0.001},
+]
+    
+    for config in configs:
+        trained_net = MiniBatchGD(trainX, trainY, train_y, valX,val_y,config, init_net, lam=config['lam'], seed=42)
+        PlotImg(trained_net, config['eta'], config['lam'])
+    
 
 
 
